@@ -3,6 +3,7 @@ import json
 import http.server
 import socketserver
 import threading
+import urllib.parse
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -25,10 +26,8 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
 
 def run_web_server():
     with socketserver.TCPServer(("", PORT), HealthCheckHandler) as httpd:
-        print(f"Web server running on port {PORT}")
         httpd.serve_forever()
 
-# Chạy web server ẩn ở background để Render không báo lỗi Timeout
 threading.Thread(target=run_web_server, daemon=True).start()
 
 # ==================== CẤU HÌNH HỆ THỐNG ====================
@@ -206,8 +205,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     
     if data == "menu":
+        user_states.pop(user_id, None)
         await show_menu(query)
     elif data == "back_home":
+        user_states.pop(user_id, None)
         user = query.from_user
         db = load_db()
         bal = db.get(str(user.id), {}).get("balance", 0)
@@ -269,12 +270,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
+    
     if user_states.get(user_id) == "waiting_deposit_amount":
-        if text.isdigit():
+        # Làm sạch chuỗi: loại bỏ dấu chấm, dấu phẩy, chữ đ hoặc khoảng trắng nếu người dùng vô tình gõ vào
+        clean_text = text.replace(".", "").replace(",", "").replace("đ", "").replace("VND", "").strip()
+        
+        if clean_text.isdigit():
             user_states.pop(user_id, None)
-            await request_deposit_input(update, context, user_id, int(text))
+            await request_deposit_input(update, context, user_id, int(clean_text))
         else:
-            await update.message.reply_text("❌ Số tiền không hợp lệ. Vui lòng nhập lại số nguyên:")
+            await update.message.reply_text("❌ Số tiền không hợp lệ. Vui lòng chỉ nhập số nguyên (Ví dụ: `50000`) hoặc bấm /start để thoát:")
 
 async def cmd_naptien(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
