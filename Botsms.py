@@ -5,7 +5,7 @@ import socketserver
 import threading
 import urllib.parse
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -221,9 +221,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     elif data == "deposit":
         user_states[user_id] = "waiting_deposit_amount"
-        await query.edit_message_text(
-            "💳 Nhập số tiền cần nạp (Ví dụ: `50000`):",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Quay lại", callback_data="menu")]]),
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="💳 Vui lòng nhập số tiền cần nạp (Ví dụ: `50000`):",
             parse_mode="Markdown"
         )
     elif data.startswith("buy_"):
@@ -232,7 +232,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = data.split("_")[2]
         user = query.from_user
         user_states.pop(user.id, None)
-        await query.edit_message_caption(caption=query.message.caption + "\n\n⏳ *Đã gửi yêu cầu xác nhận tới Admin!*", parse_mode="Markdown")
+        try:
+            await query.edit_message_caption(caption=query.message.caption + "\n\n⏳ *Đã gửi yêu cầu xác nhận tới Admin!*", parse_mode="Markdown")
+        except:
+            await query.message.reply_text("⏳ *Đã gửi yêu cầu xác nhận tới Admin!*", parse_mode="Markdown")
         
         admin_text = (
             f"🔔 *CÓ YÊU CẦU NẠP TIỀN MỚI*\n\n"
@@ -261,7 +264,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_db(db)
             await query.edit_message_text(f"✅ Đã DUYỆT `{amount:,}đ` cho `{target_user_id}`.")
             try:
-                await context.bot.send_message(chat_id=target_user_id, text=f"✅ Nạp tiền thành công! Cộng thêm `{amount:,}đ`.", parse_mode="Markdown")
+                await context.bot.send_message(chat_id=target_user_id, text=f"✅ Nạp tiền thành công! Cộng thêm `{amount:,}đ` vào tài khoản.", parse_mode="Markdown")
             except:
                 pass
         else:
@@ -271,22 +274,31 @@ async def handle_message_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     text = update.message.text.strip()
     
-    if user_states.get(user_id) == "waiting_deposit_amount":
-        # Làm sạch chuỗi: loại bỏ dấu chấm, dấu phẩy, chữ đ hoặc khoảng trắng nếu người dùng vô tình gõ vào
-        clean_text = text.replace(".", "").replace(",", "").replace("đ", "").replace("VND", "").strip()
-        
+    clean_text = text.replace(".", "").replace(",", "").replace("đ", "").replace("VND", "").strip()
+    
+    if user_states.get(user_id) == "waiting_deposit_amount" or clean_text.isdigit():
         if clean_text.isdigit():
-            user_states.pop(user_id, None)
-            await request_deposit_input(update, context, user_id, int(clean_text))
-        else:
-            await update.message.reply_text("❌ Số tiền không hợp lệ. Vui lòng chỉ nhập số nguyên (Ví dụ: `50000`) hoặc bấm /start để thoát:")
+            amount = int(clean_text)
+            if amount >= 1000:
+                user_states.pop(user_id, None)
+                await request_deposit_input(update, context, user_id, amount)
+                return
+        
+        if user_states.get(user_id) == "waiting_deposit_amount":
+            await update.message.reply_text("❌ Số tiền không hợp lệ. Vui lòng nhập số nguyên lớn hơn 1,000 (Ví dụ: `50000`):", parse_mode="Markdown")
 
 async def cmd_naptien(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
-    if not args or not args[0].isdigit():
-        await update.message.reply_text("Dùng: `/naptien <số_tiền>`", parse_mode="Markdown")
+    if not args or not args[0].replace(".", "").replace(",", "").isdigit():
+        user_states[update.effective_user.id] = "waiting_deposit_amount"
+        await update.message.reply_text("💳 Vui lòng nhập số tiền bạn muốn nạp (Ví dụ: `50000`):", parse_mode="Markdown")
         return
-    await request_deposit_input(update, context, update.effective_user.id, int(args[0]))
+    
+    amount = int(args[0].replace(".", "").replace(",", ""))
+    if amount >= 1000:
+        await request_deposit_input(update, context, update.effective_user.id, amount)
+    else:
+        await update.message.reply_text("❌ Số tiền nạp tối thiểu là 1,000đ.")
 
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
